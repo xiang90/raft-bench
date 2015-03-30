@@ -1,11 +1,15 @@
 package main
 
 import (
+	"io/ioutil"
+	"log"
+	"os"
 	"time"
 
 	"github.com/coreos/etcd/Godeps/_workspace/src/golang.org/x/net/context"
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/coreos/etcd/wal"
 )
 
 var (
@@ -25,26 +29,35 @@ type raftNode struct {
 }
 
 func (n *raftNode) run() {
+	dir, err := ioutil.TempDir("", "raft-bench")
+	if err != nil {
+		log.Fatalf("raft-bench: cannot create dir for wal (%v)", err)
+	}
+	defer os.RemoveAll(dir)
+
+	w, err := wal.Create(dir, nil)
+	if err != nil {
+		log.Fatalf("raft-bench: create wal error: %v", err)
+	}
+	defer w.Close()
+
 	for {
 		select {
 		case <-n.ticker:
 			n.Tick()
 		case rd := <-n.Node.Ready():
-			// save to WAL
-			time.Sleep(time.Millisecond)
+			w.Save(rd.HardState, rd.Entries)
 			n.raftStorage.Append(rd.Entries)
+
 			n.trans.Send(rd.Messages)
 			for i := range rd.CommittedEntries {
-				// var r etcdserverpb.Request
-				// err := r.Unmarshal(rd.CommittedEntries[i].Data)
-				// if err != nil {
-				// 	log.Fatal("err unmarshal ", err)
-				// }
 				if rd.CommittedEntries[i].Index == n.goal {
 					n.reach <- struct{}{}
 				}
 			}
 			n.Node.Advance()
+			// batch for 0.5ms
+			time.Sleep(500 * time.Microsecond)
 		case <-n.done:
 			return
 		}
