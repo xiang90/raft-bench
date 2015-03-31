@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"strings"
 	"time"
@@ -48,7 +49,9 @@ func main() {
 	}
 
 	// TODO: add warmup...
-
+	mstats := runtime.MemStats{}
+	runtime.ReadMemStats(&mstats)
+	alloc0 := mstats.Mallocs
 	now := time.Now()
 	if *id == 1 {
 		for i := 0; i < 500000; i++ {
@@ -56,9 +59,12 @@ func main() {
 		}
 	}
 	<-rn.reach
-	pprof.StopCPUProfile()
 	d := time.Since(now)
-	fmt.Printf("raft-bench: throughput is %d ops per second\n", uint64(500000*time.Second/d))
+	pprof.StopCPUProfile()
+	runtime.ReadMemStats(&mstats)
+	alloc1 := mstats.Mallocs
+	fmt.Printf("raft-bench: throughput is %d ops/second\n", uint64(500000*time.Second/d))
+	fmt.Printf("raft-bench: %d allocs/op\n", (alloc1-alloc0)/500000)
 	time.Sleep(time.Second * 2)
 }
 
