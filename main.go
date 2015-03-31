@@ -54,7 +54,10 @@ func main() {
 	alloc0 := mstats.Mallocs
 	now := time.Now()
 	if *id == 1 {
-		for i := 0; i < 500000; i++ {
+		for i := 1 + len(peers) + 1; i <= 500000; i++ {
+			if i%100 == 0 {
+				latency[i/100][0] = time.Now().UnixNano()
+			}
 			rn.Propose(context.TODO(), data)
 		}
 	}
@@ -65,6 +68,9 @@ func main() {
 	alloc1 := mstats.Mallocs
 	fmt.Printf("raft-bench: throughput is %d ops/second\n", uint64(500000*time.Second/d))
 	fmt.Printf("raft-bench: %d allocs/op\n", (alloc1-alloc0)/500000)
+	if *id == 1 {
+		fmt.Printf("raft-bench: average latency is %d microsecond\n", avgLatency()/int64(time.Microsecond))
+	}
 	time.Sleep(time.Second * 2)
 }
 
@@ -93,7 +99,7 @@ func setup(id int, peers []string) *raftNode {
 		raftStorage: s,
 		ticker:      time.NewTicker(tickDuration).C,
 		trans:       &noopTrans{},
-		goal:        500002,
+		goal:        500001,
 		reach:       make(chan struct{}),
 		done:        make(chan struct{}),
 	}

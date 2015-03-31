@@ -51,6 +51,9 @@ func (n *raftNode) run() {
 
 			n.trans.Send(rd.Messages)
 			for i := range rd.CommittedEntries {
+				if rd.CommittedEntries[i].Index%100 == 0 {
+					latency[rd.CommittedEntries[i].Index/100][1] = time.Now().UnixNano()
+				}
 				if rd.CommittedEntries[i].Index == n.goal {
 					n.reach <- struct{}{}
 				}
